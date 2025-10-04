@@ -1,7 +1,6 @@
 package utils
 
 import scala.io.Source
-import java.nio.file.{Paths, Files}
 
 object PromptLoader {
   def load(filename: String): String = {
