@@ -17,3 +17,6 @@ The solver will need to generate a Python function that reproduces the given inp
 ### Format Your Response as Follows:
 ```python
 [Python function template (optional, if you want to guide the solver)]
+```
+Examples: (input1, output1), (input2, output2), ...
+Message: [Natural language description of the function]

@@ -42,6 +42,7 @@ class Proposer(llm: LLM, buffer: Buffer) {
       .mkString("\n---\n")
     val fullPrompt = prompt.replace("{references}", references)
     llm.generate(fullPrompt).flatMap { response =>
+      println(s"LLM Response for Induction: '$response'")
       Try {
         val program = extractProgram(response)
         val examples = extractExamples(response)
@@ -64,8 +65,11 @@ class Proposer(llm: LLM, buffer: Buffer) {
   }
 
   private def extractExamples(response: String): List[(String, String)] = {
-    // Parsing simplifié pour l'exemple
-    List(("1", "2"), ("3", "4")) // À remplacer par une vraie extraction
+    val examplesRegex = """Examples: \((.*?)\)""".r
+    examplesRegex.findFirstMatchIn(response).map { m =>
+      val parts = m.group(1).split(",").map(_.trim)
+      List((parts(0), parts(1)))
+    }.getOrElse(List.empty)
   }
 
   private def extractMessage(response: String): String = {

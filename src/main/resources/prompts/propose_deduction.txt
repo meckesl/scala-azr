@@ -8,3 +8,6 @@ Here are some reference tasks for inspiration:
 Propose a new deduction task. Format your response as follows:
 ```python
 [Python function here]
+```
+Input: [Input value]
+Output: [Output value]

@@ -53,22 +53,22 @@ class AZR(llm: LLM, iterations: Int = 100) {
                       logger.info(s"Updating model with reward: $combinedReward")
 
                     case Failure(e) =>
-                      logger.error(s"Validation failed: ${e.getMessage}")
+                      logger.error(s"Validation failed $taskType $i: ${e.getMessage}")
                   }
 
                 case Failure(e) =>
-                  logger.error(s"Failed to solve task: ${e.getMessage}")
+                  logger.error(s"Failed to solve task $taskType $i: ${e.getMessage}")
               }
 
             case Success(false) =>
-              logger.warn(s"Proposed task is invalid: $proposedTask")
+              logger.warn(s"Proposed task is invalid $taskType  $i: $proposedTask")
 
             case Failure(e) =>
-              logger.error(s"Failed to validate task: ${e.getMessage}")
+              logger.error(s"Failed to validate $taskType task $i: ${e.getMessage}")
           }
 
         case Failure(e) =>
-          logger.error(s"Failed to propose task: ${e.getMessage}")
+          logger.error(s"Failed to propose $taskType task $i: ${e.getMessage}")
       }
     }
   }

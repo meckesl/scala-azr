@@ -20,7 +20,7 @@ class CodeExecutor {
     writer.write(script)
     writer.close()
 
-    val output = Process(Seq("python3", tempFile.getAbsolutePath), None, "PYTHONPATH" -> "").!!
+    val output = Process(Seq("python", tempFile.getAbsolutePath), None, "PYTHONPATH" -> "").!!
     output.trim
   }
 
@@ -32,7 +32,7 @@ class CodeExecutor {
     writer.write(program)
     writer.close()
 
-    val result = Process(Seq("python3", "-m", "py_compile", tempFile.getAbsolutePath)).!
+    val result = Process(Seq("python", "-m", "py_compile", tempFile.getAbsolutePath)).!
     result == 0
   }
 

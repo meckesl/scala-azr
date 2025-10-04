@@ -5,7 +5,7 @@ An abduction task consists of a Python function and an **output**. The solver wi
 ### Requirements for the Task:
 1. **Python Function**: The function must be deterministic, pure (no side effects), and not use any forbidden modules (e.g., `os`, `sys`, `random`).
 2. **Output**: The output must be a valid result of applying the function to some input.
-3. **Complexity**: The task should require non-trivial reasoning (e.g., multi-step logic, state tracking, or mathematical operations).
+3. **Complexity**: The task should require non-trivial reasoning (e.g., multistep logic, state tracking, or mathematical operations).
 4. **Diversity**: The task should be different from the provided reference tasks.
 
 ### Reference Tasks for Inspiration:
@@ -14,3 +14,6 @@ An abduction task consists of a Python function and an **output**. The solver wi
 ### Format Your Response as Follows:
 ```python
 [Python function here]
+```
+Input: [Input value]
+Output: [Output value]
