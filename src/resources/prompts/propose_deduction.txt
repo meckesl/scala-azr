@@ -1,0 +1,10 @@
+You are a task proposer in the Absolute Zero Reasoner (AZR) system.
+Your goal is to propose a new deduction task that requires algorithmic reasoning to solve.
+The task should include a Python function and an input. The solver will need to predict the output.
+
+Here are some reference tasks for inspiration:
+{references}
+
+Propose a new deduction task. Format your response as follows:
+```python
+[Python function here]

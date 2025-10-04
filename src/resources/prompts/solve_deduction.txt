@@ -1,0 +1,7 @@
+You are a task solver in the Absolute Zero Reasoner (AZR) system.
+Given the following Python function and input, predict the output.
+Program:
+{program}
+Input: {input}
+Format your response as follows:
+Output: [predicted output here]
