@@ -1,6 +1,5 @@
-package core
-
 import models.MockLLM
+import core._
 
 object Main extends App {
   val llm = new MockLLM()
