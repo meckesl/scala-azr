@@ -5,17 +5,17 @@ import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
 
-// ======================
+// ====================== 
 // 1. Définition des termes (Programmes)
-// ======================
+// ====================== 
 sealed trait Term
 case class Var(name: String) extends Term
 case class Abs(param: String, body: Term) extends Term
 case class App(func: Term, arg: Term) extends Term
 
-// ======================
+// ====================== 
 // 2. Moteur Symbolique (Environnement de Vérification)
-// ======================
+// ====================== 
 object SymbolicEngine {
   def pretty(term: Term): String = term match {
     case Var(name) => name
@@ -55,9 +55,9 @@ object SymbolicEngine {
   }
 }
 
-// ======================
+// ====================== 
 // 3. Tâches de Raisonnement AZR
-// ======================
+// ====================== 
 sealed trait ReasoningTask
 case class Deduction(program: Term, input: Term) extends ReasoningTask
 case class Abduction(program: Term, output: Term) extends ReasoningTask
@@ -65,26 +65,22 @@ case class Induction(examples: List[(Term, Term)]) extends ReasoningTask
 
 case class TaskTriplet(program: Term, input: Term, output: Term)
 
-// ======================
+// ====================== 
 // 4. Remote "Blank-Slate" LLM Client
-// ======================
+// ====================== 
 object RemoteLLM {
   private val backend = HttpClientSyncBackend()
 
-  // Case classes to match the JSON structure of our Python API
   case class LLMRequest(prompt: String)
   case class LLMResponse(generated_text: String)
+  case class TrainRequest(reward: Double)
+  case class TrainResponse(status: String, loss: Option[Double])
 
-  // A very basic parser. A real implementation would need a robust parsing library.
   private def parseTerm(text: String): Term = {
-    val trimmed = text.trim
-    if (trimmed.startsWith("λ")) {
-      Abs("x", Var("y")) // Placeholder
-    } else if (trimmed.startsWith("(")) {
-      App(Var("f"), Var("x")) // Placeholder
-    } else {
-      Var(trimmed.split(" ").headOption.getOrElse("err"))
-    }
+    val trimmed = text.trim.toLowerCase
+    if (trimmed.contains("λ") || trimmed.contains("\\")) Abs("v", Var("parsed"))
+    else if (trimmed.startsWith("(")) App(Var("f"), Var("x"))
+    else Var(trimmed.split("\\\\s+").headOption.getOrElse("err"))
   }
 
   def getResponse(prompt: String): Term = {
@@ -95,25 +91,43 @@ object RemoteLLM {
       .contentType("application/json")
       .response(asJson[LLMResponse])
 
-    println(s"--- 📞 Calling remote LLM at http://127.0.0.1:5000 ---")
+    println(s"--- 📞 Calling remote LLM for generation ---")
     val response = request.send(backend)
 
     response.body match {
       case Right(llmResponse) =>
         println(s"   Raw response from model: '${llmResponse.generated_text}'")
-        // The output will be gibberish. We need to parse it into a Term.
         parseTerm(llmResponse.generated_text)
       case Left(error) =>
         println(s"   ❌ Error calling remote LLM: $error")
         println("   Is the python llm_server.py running?")
-        Var("api_error") // Return a default error term
+        Var("api_error")
+    }
+  }
+
+  def sendTrainSignal(reward: Double): Unit = {
+    val requestPayload = TrainRequest(reward).asJson
+    val request = basicRequest
+      .post(uri"http://127.0.0.1:5000/train")
+      .body(requestPayload.toString)
+      .contentType("application/json")
+      .response(asJson[TrainResponse])
+
+    println(s"--- 🏋️ Sending training signal (Reward: $reward) ---")
+    val response = request.send(backend)
+
+    response.body match {
+      case Right(trainResponse) =>
+        println(s"   Training step status: ${trainResponse.status}, Loss: ${trainResponse.loss.getOrElse("N/A")}")
+      case Left(error) =>
+        println(s"   ❌ Error sending training signal: $error")
     }
   }
 }
 
-// ======================
+// ====================== 
 // 5. Absolute Zero Reasoner (AZR)
-// ======================
+// ====================== 
 object AbsoluteZeroReasoner {
   private val random = new Random()
   private var deductionBuffer = List.empty[TaskTriplet]
@@ -144,7 +158,7 @@ object AbsoluteZeroReasoner {
     triplet
   }
 
-  def run(iterations: Int = 10): Unit = {
+  def run(iterations: Int = 20): Unit = {
     println("\n--- Démarrage de la boucle de Self-Play AZR (avec LLM distant 'Table Rase') ---")
     val seedProgram = Abs("x", Var("x"))
     val seedInput = Var("z")
@@ -178,14 +192,17 @@ object AbsoluteZeroReasoner {
       } else {
         println(s"❌ Échec. Récompense: $reward. Attendu (approx.): ${SymbolicEngine.pretty(expected)}")
       }
+      
+      // 4. Envoyer le signal d'entraînement au serveur Python
+      RemoteLLM.sendTrainSignal(reward)
     }
     println("\n--- Fin de la boucle de Self-Play AZR ---")
   }
 }
 
-// ======================
+// ====================== 
 // 6. Point d'Entrée
-// ======================
+// ====================== 
 object Main {
   def main(args: Array[String]): Unit = {
     AbsoluteZeroReasoner.run()
