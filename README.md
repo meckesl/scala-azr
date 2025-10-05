@@ -4,7 +4,7 @@ This project is a simulation of the "Absolute Zero" self-play reasoning paradigm
 
 ## How it Works
 
-1.  The **Python LLM Server** (`llm_server.py`) loads a pre-trained GPT-2 model and exposes it via a local API. This server is responsible for generating responses and updating the model's weights based on rewards.
+1.  The **Python LLM Server** (`llm_server.py`) loads a pre-trained `EleutherAI/gpt-neo-125M` model and exposes it via a local API. This server is responsible for generating responses and updating the model's weights based on rewards.
 2.  The **Scala Application** (`LambdaCalculusRL.scala`) orchestrates the self-play loop. It proposes new tasks, validates them, asks the Python server to solve them, calculates a reward, and sends that reward back to the server for training.
 
 ## Setting Up the Python LLM Server

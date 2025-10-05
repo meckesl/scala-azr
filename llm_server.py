@@ -3,19 +3,17 @@ from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
 import torch
 
 # --- Model Configuration ---
-# We are now loading a pre-trained model.
-MODEL_ARCH = "gpt2"
+# We are now loading a more capable, instruction-tuned model specialized for code.
+MODEL_ARCH = "Qwen/Qwen2-0.5B-Instruct"
 
-print("1. Loading pre-trained model and tokenizer...")
+print(f"1. Loading pre-trained model and tokenizer for {MODEL_ARCH}...")
 # Load the standard configuration and tokenizer for the chosen architecture.
 config = AutoConfig.from_pretrained(MODEL_ARCH)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ARCH)
 tokenizer.pad_token = tokenizer.eos_token
 
-# --- THIS IS THE KEY CHANGE ---
-# Instead of initializing from config (random weights), we load the pre-trained weights.
+# Load the pre-trained weights for the new model.
 model = AutoModelForCausalLM.from_pretrained(MODEL_ARCH)
-# --- END OF KEY CHANGE ---
 
 print("2. Model is initialized with pre-trained weights.")
 
