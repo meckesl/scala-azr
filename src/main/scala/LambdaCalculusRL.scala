@@ -1,4 +1,9 @@
 import scala.util.Random
+import sttp.client3._
+import sttp.client3.circe._
+import io.circe.generic.auto._
+import io.circe.parser._
+import io.circe.syntax._
 
 // ======================
 // 1. Définition des termes (Programmes)
@@ -33,7 +38,7 @@ object SymbolicEngine {
       if (next == current) return current
       current = next
     }
-    current // Return after max steps
+    current
   }
 
   private def betaReduceStep(term: Term): Term = term match {
@@ -58,24 +63,50 @@ case class Deduction(program: Term, input: Term) extends ReasoningTask
 case class Abduction(program: Term, output: Term) extends ReasoningTask
 case class Induction(examples: List[(Term, Term)]) extends ReasoningTask
 
-// Triplet validé (Programme, Entrée, Sortie)
 case class TaskTriplet(program: Term, input: Term, output: Term)
 
 // ======================
-// 4. LLM "Table Rase" (Initialisé à Zéro)
+// 4. Remote "Blank-Slate" LLM Client
 // ======================
-object BlankSlateLLM {
-  private val random = new Random()
-  private val possibleVars = Seq("x", "y", "z", "f", "a")
-  
-  // Simule un LLM sans connaissance. Il retourne toujours une structure de base.
+object RemoteLLM {
+  private val backend = HttpClientSyncBackend()
+
+  // Case classes to match the JSON structure of our Python API
+  case class LLMRequest(prompt: String)
+  case class LLMResponse(generated_text: String)
+
+  // A very basic parser. A real implementation would need a robust parsing library.
+  private def parseTerm(text: String): Term = {
+    val trimmed = text.trim
+    if (trimmed.startsWith("λ")) {
+      Abs("x", Var("y")) // Placeholder
+    } else if (trimmed.startsWith("(")) {
+      App(Var("f"), Var("x")) // Placeholder
+    } else {
+      Var(trimmed.split(" ").headOption.getOrElse("err"))
+    }
+  }
+
   def getResponse(prompt: String): Term = {
-    // Pour simuler une tentative de construction, il peut retourner aléatoirement
-    // une variable, une abstraction simple ou une application simple.
-    random.nextInt(3) match {
-      case 0 => Var(possibleVars(random.nextInt(possibleVars.length)))
-      case 1 => Abs("v", Var(possibleVars(random.nextInt(possibleVars.length))))
-      case 2 => App(Var("f"), Var("x"))
+    val requestPayload = LLMRequest(prompt).asJson
+    val request = basicRequest
+      .post(uri"http://127.0.0.1:5000/generate")
+      .body(requestPayload.toString)
+      .contentType("application/json")
+      .response(asJson[LLMResponse])
+
+    println(s"--- 📞 Calling remote LLM at http://127.0.0.1:5000 ---")
+    val response = request.send(backend)
+
+    response.body match {
+      case Right(llmResponse) =>
+        println(s"   Raw response from model: '${llmResponse.generated_text}'")
+        // The output will be gibberish. We need to parse it into a Term.
+        parseTerm(llmResponse.generated_text)
+      case Left(error) =>
+        println(s"   ❌ Error calling remote LLM: $error")
+        println("   Is the python llm_server.py running?")
+        Var("api_error") // Return a default error term
     }
   }
 }
@@ -86,15 +117,8 @@ object BlankSlateLLM {
 object AbsoluteZeroReasoner {
   private val random = new Random()
   private var deductionBuffer = List.empty[TaskTriplet]
-  private var abductionBuffer = List.empty[TaskTriplet]
-  private var inductionBuffer = List.empty[TaskTriplet]
 
-  // --- Rôle 1: Proposer ---
   def propose(taskType: String): ReasoningTask = {
-    println(s"Proposing a new '$taskType' task...")
-    // Le LLM "Table Rase" génère une proposition de terme.
-    // Dans une vraie implémentation, on utiliserait ce terme pour construire une tâche.
-    // Ici, on simplifie en créant une tâche à partir d'un triplet existant.
     val baseTriplet = deductionBuffer(random.nextInt(deductionBuffer.length))
     taskType match {
       case "Deduction" => Deduction(baseTriplet.program, baseTriplet.input)
@@ -103,50 +127,39 @@ object AbsoluteZeroReasoner {
     }
   }
 
-  // --- Rôle 2: Solveur ---
   def solve(task: ReasoningTask): Term = {
     val prompt = task match {
       case Deduction(p, i) => s"Deduction Task:\nProgram: ${SymbolicEngine.pretty(p)}\nInput: ${SymbolicEngine.pretty(i)}\nWhat is the output?"
       case Abduction(p, o) => s"Abduction Task:\nProgram: ${SymbolicEngine.pretty(p)}\nOutput: ${SymbolicEngine.pretty(o)}\nWhat was the input?"
       case Induction(ex) => s"Induction Task:\nExamples: ${ex.map(p => s"(${SymbolicEngine.pretty(p._1)} -> ${SymbolicEngine.pretty(p._2)})").mkString(", ")}\nWhat is the program?"
     }
-    // Le LLM "Table Rase" donne une réponse naïve.
-    BlankSlateLLM.getResponse(prompt)
+    RemoteLLM.getResponse(prompt)
   }
 
-  // --- Validation et Boucle de Self-Play ---
   private def validateAndStore(program: Term, input: Term): TaskTriplet = {
     val output = SymbolicEngine.normalize(App(program, input))
     val triplet = TaskTriplet(program, input, output)
     println(s"✅ Triplet Validé: P=${SymbolicEngine.pretty(program)}, I=${SymbolicEngine.pretty(input)}, O=${SymbolicEngine.pretty(output)}")
     deductionBuffer :+= triplet
-    abductionBuffer :+= triplet
-    inductionBuffer :+= triplet
     triplet
   }
 
   def run(iterations: Int = 10): Unit = {
-    println("\n--- Démarrage de la boucle de Self-Play AZR (avec LLM 'Table Rase') ---")
-    // Initialisation avec une tâche simple (identité)
+    println("\n--- Démarrage de la boucle de Self-Play AZR (avec LLM distant 'Table Rase') ---")
     val seedProgram = Abs("x", Var("x"))
     val seedInput = Var("z")
     validateAndStore(seedProgram, seedInput)
 
     for (i <- 1 to iterations) {
       println(s"\n--- Itération $i/$iterations ---")
-
-      // 1. Le Proposer génère une nouvelle tâche
       val taskType = Seq("Deduction", "Abduction", "Induction")(random.nextInt(3))
       println(s"1. Le Proposer génère une tâche de type '$taskType'...")
       val taskToSolve = propose(taskType)
-      println(s"   Tâche proposée: $taskToSolve")
-
-      // 2. Le Solveur tente de résoudre la tâche
+      
       println("2. Le Solveur tente de résoudre la tâche...")
       val solution = solve(taskToSolve)
       println(s"   Solution proposée par le solveur: ${SymbolicEngine.pretty(solution)}")
 
-      // 3. Vérification et Récompense
       println("3. Vérification et calcul de la récompense...")
       val (reward, expected) = taskToSolve match {
         case Deduction(p, i) =>
@@ -154,14 +167,14 @@ object AbsoluteZeroReasoner {
           (if (SymbolicEngine.areAlphaEquivalent(solution, correctOutput)) 1.0 else 0.0, correctOutput)
         case Abduction(p, o) =>
           val correctOutput = SymbolicEngine.normalize(App(p, solution))
-          (if (SymbolicEngine.areAlphaEquivalent(correctOutput, o)) 1.0 else 0.0, Var("any valid input")) // L'attendu est complexe ici
+          (if (SymbolicEngine.areAlphaEquivalent(correctOutput, o)) 1.0 else 0.0, Var("any valid input"))
         case Induction(ex) =>
           val correctProgram = deductionBuffer.find(t => t.input == ex.head._1 && t.output == ex.head._2).map(_.program).getOrElse(Var("unknown"))
           (if (SymbolicEngine.areAlphaEquivalent(solution, correctProgram)) 1.0 else 0.0, correctProgram)
       }
 
       if (reward > 0) {
-        println(s"✅ Succès! Récompense: $reward. Le solveur a trouvé: ${SymbolicEngine.pretty(solution)}")
+        println(s"✅ Succès! Récompense: $reward.")
       } else {
         println(s"❌ Échec. Récompense: $reward. Attendu (approx.): ${SymbolicEngine.pretty(expected)}")
       }
@@ -172,7 +185,7 @@ object AbsoluteZeroReasoner {
 
 // ======================
 // 6. Point d'Entrée
-// =====================
+// ======================
 object Main {
   def main(args: Array[String]): Unit = {
     AbsoluteZeroReasoner.run()
