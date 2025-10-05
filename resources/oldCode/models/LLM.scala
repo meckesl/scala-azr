@@ -13,7 +13,7 @@ class MockLLM extends LLM {
           Try {
             """```python
               |def f(x: int) -> int:
-              |    return x * 2 + 1
+              | return x * 2 + 1
               |```
               |Input: 3
               |Output: 7
@@ -27,7 +27,7 @@ class MockLLM extends LLM {
           Try {
             """```python
               |def f(x: int) -> int:
-              |    return x * 3
+              | return x * 3
               |```
               |Input: 3
               |Output: 9
@@ -41,7 +41,7 @@ class MockLLM extends LLM {
           Try {
             """```python
               |def f(x: int) -> int:
-              |    return x + 5
+              | return x + 5
               |```
               |Examples: (1, 6)
               |Message: Add 5 to the input.
@@ -51,7 +51,7 @@ class MockLLM extends LLM {
           Try {
             """```python
               |def f(x: int) -> int:
-              |    return x + 5
+              | return x + 5
               |```
             """.stripMargin
           }
