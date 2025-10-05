@@ -3,14 +3,21 @@ from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
 import torch
 
 # --- Model Configuration ---
+# We are now loading a pre-trained model.
 MODEL_ARCH = "gpt2"
 
-print("1. Configuring a blank-slate model...")
+print("1. Loading pre-trained model and tokenizer...")
+# Load the standard configuration and tokenizer for the chosen architecture.
 config = AutoConfig.from_pretrained(MODEL_ARCH)
-model = AutoModelForCausalLM.from_config(config)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ARCH)
 tokenizer.pad_token = tokenizer.eos_token
-print("2. Model is initialized with random weights.")
+
+# --- THIS IS THE KEY CHANGE ---
+# Instead of initializing from config (random weights), we load the pre-trained weights.
+model = AutoModelForCausalLM.from_pretrained(MODEL_ARCH)
+# --- END OF KEY CHANGE ---
+
+print("2. Model is initialized with pre-trained weights.")
 
 # --- Training Setup ---
 optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
