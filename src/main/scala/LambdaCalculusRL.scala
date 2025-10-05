@@ -11,6 +11,7 @@ sealed trait Term
 case class Var(name: String) extends Term
 case class Abs(param: String, body: Term) extends Term
 case class App(func: Term, arg: Term) extends Term
+case class ParseError() extends Term
 
 // ======================
 // 2. Moteur Symbolique (Environnement de Vérification)
@@ -20,6 +21,7 @@ object SymbolicEngine {
     case Var(name) => name
     case Abs(param, body) => s"λ$param.${pretty(body)}"
     case App(func, arg) => s"(${pretty(func)} ${pretty(arg)})"
+    case ParseError() => "err"
   }
 
   private def substitute(term: Term, x: String, replacement: Term): Term = term match {
@@ -69,10 +71,23 @@ object RemoteLLM {
   case class TrainResponse(status: String, loss: Option[Double])
 
   private def parseTerm(text: String): Term = {
-    val trimmed = text.trim.toLowerCase.replaceAll("[^a-zλ.()\\s]", "")
-    if (trimmed.contains("λ") || trimmed.contains("\\")) Abs("v", Var("parsed_abs"))
-    else if (trimmed.startsWith("(")) App(Var("f"), Var("x"))
-    else Var(trimmed.split("\\s+").headOption.filter(_.nonEmpty).getOrElse("err"))
+    val trimmed = text.trim
+    val cleanedText = trimmed.replaceAll("[^a-zλ\\\\.()\\s]", "")
+    println(s"best match : $cleanedText")
+    val lambdaPattern = """^[\\λ]([a-z])[.](.*)$""".r // Cas 1 : Abstraction (λx.x ou \x.x)
+    val appPattern = """^\((.*)\s+(.*)\)$""".r // Cas 2 : Application ((M N))
+    val varPattern = """^[a-z]+$""".r // Cas 3 : Variable (x, y, z...)
+
+    cleanedText match {
+      case lambdaPattern(param, body) =>
+        Abs(param, parseTerm(body))  // Parse récursivement le corps
+      case appPattern(func, arg) =>
+        App(parseTerm(func), parseTerm(arg))  // Parse récursivement func et arg
+      case varPattern(name) =>
+        Var(name)
+      case _ =>
+        ParseError()  // Fallback en cas d'échec
+    }
   }
 
   def getResponse(prompt: String): Term = {
@@ -137,14 +152,12 @@ object AbsoluteZeroReasoner {
     val examples = taskBuffer.take(2).map(t => SymbolicEngine.pretty(t.program)).mkString("\n")
     val prompt =
       s"""
-      You are an expert in lambda calculus. Your goal is to invent a new program.
-      Here are some examples of existing programs:
-      $examples
-
-      Please provide a new, simple lambda calculus program that is different from the examples.
-      Your response should only be the program itself, like "λx.λy.x".
+      Réponds UNIQUEMENT avec un terme du lambda calcul non typé, sans explication ni commentaire.
+      Exemples valides : λx.x, λx.λy.x y, (λx.x) z
+      Format attendu : UN SEUL terme, sans espace avant/après, sans guillemets.
+      Nouveau terme :
       """
-    println("1. Proposer is calling LLM to generate a new program...")
+    println(s"1. Proposer is calling LLM to generate a new program...\n{$prompt")
     val newProgram = RemoteLLM.getResponse(prompt)
     println(s"   LLM proposed new program: ${SymbolicEngine.pretty(newProgram)}")
     newProgram
@@ -160,7 +173,14 @@ object AbsoluteZeroReasoner {
   private def validateAndStore(program: Term, input: Term): TaskTriplet = {
     val output = SymbolicEngine.normalize(App(program, input))
     val triplet = TaskTriplet(program, input, output)
-    println(s"   ✅ Triplet Validé: P=${SymbolicEngine.pretty(program)}, I=${SymbolicEngine.pretty(input)}, O=${SymbolicEngine.pretty(output)}")
+
+    val p = SymbolicEngine.pretty(program)
+    val i = SymbolicEngine.pretty(input)
+    val o = SymbolicEngine.pretty(output)
+
+    if (Seq(p, i, o).exists(_.contains("error"))) return triplet
+
+    println(s"   ✅ Triplet Validé: P=${p}, I=${i}, O=${o}")
     taskBuffer :+= triplet
     triplet
   }
@@ -168,40 +188,46 @@ object AbsoluteZeroReasoner {
   def run(iterations: Int = 20): Unit = {
     println("\n--- Démarrage de la boucle de Self-Play AZR ---")
     // The seeding is now done at initialization, so we just log it.
-    println(s"Buffer initialisé avec le triplet seed: P=${SymbolicEngine.pretty(taskBuffer.head.program)}")
+    println(s"Buffer seed: P=${SymbolicEngine.pretty(taskBuffer.head.program)}")
 
     for (i <- 1 to iterations) {
       println(s"\n--- Itération $i/$iterations ---")
 
       // --- 1. PHASE DE PROPOSITION ---
       val proposedProgram = proposeProgram()
-      val randomInput = Var(Seq("a", "b", "c")(random.nextInt(3)))
 
-      // --- 2. PHASE DE VALIDATION ---
-      println("2. Validation du nouveau programme avec le moteur symbolique...")
-      val validTriplet = validateAndStore(proposedProgram, randomInput)
+      if (!proposedProgram.equals(ParseError())) {
+        val randomInput = Var(Seq("a", "b", "c")(random.nextInt(3)))
 
-      // --- 3. PHASE DE RÉSOLUTION ---
-      println("3. Le Solveur tente de résoudre la tâche auto-générée...")
-      val solution = solve(validTriplet.program, validTriplet.input)
-      println(s"   Solution proposée par le solveur: ${SymbolicEngine.pretty(solution)}")
+        // --- 2. PHASE DE VALIDATION ---
+        println("2. Validation du nouveau programme avec le moteur symbolique...")
+        val validTriplet = validateAndStore(proposedProgram, randomInput)
 
-      // --- 4. PHASE DE RÉCOMPENSE ET D'ENTRAÎNEMENT ---
-      println("4. Vérification de la solution et calcul de la récompense...")
-      val correctOutput = validTriplet.output
-      val reward = if (SymbolicEngine.areAlphaEquivalent(solution, correctOutput)) 1.0 else 0.0
+        // --- 3. PHASE DE RÉSOLUTION ---
+        println("3. Le Solveur tente de résoudre la tâche auto-générée...")
+        val solution = solve(validTriplet.program, validTriplet.input)
+        println(s"   Solution proposée par le solveur: ${SymbolicEngine.pretty(solution)}")
 
-      if (reward > 0) {
-        println(s"   ✅ Succès! Récompense: $reward.")
+        // --- 4. PHASE DE RÉCOMPENSE ET D'ENTRAÎNEMENT ---
+        println("4. Vérification de la solution et calcul de la récompense...")
+        val correctOutput = validTriplet.output
+        val reward = if (SymbolicEngine.areAlphaEquivalent(solution, correctOutput)) 1.0 else 0.0
+
+        if (reward > 0) {
+          println(s"   ✅ Succès! Récompense: $reward.")
+        } else {
+          println(s"   ❌ Échec. Récompense: $reward. Attendu: ${SymbolicEngine.pretty(correctOutput)}")
+        }
+
+        // Envoyer le signal d'entraînement pour l'action du SOLVEUR
+        RemoteLLM.sendTrainSignal(reward)
+
+        // NOTE: Dans le papier AZR, le PROPOSEUR est également récompensé s'il crée des tâches
+        // de difficulté moyenne. Nous simplifions cela pour l'instant.
       } else {
-        println(s"   ❌ Échec. Récompense: $reward. Attendu: ${SymbolicEngine.pretty(correctOutput)}")
+        println("❌ Échec parse error")
       }
 
-      // Envoyer le signal d'entraînement pour l'action du SOLVEUR
-      RemoteLLM.sendTrainSignal(reward)
-      
-      // NOTE: Dans le papier AZR, le PROPOSEUR est également récompensé s'il crée des tâches
-      // de difficulté moyenne. Nous simplifions cela pour l'instant.
     }
     println("\n--- Fin de la boucle de Self-Play AZR ---")
   }
