@@ -13,7 +13,12 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_ARCH)
 tokenizer.pad_token = tokenizer.eos_token
 
 # Load the pre-trained weights for the new model.
-model = AutoModelForCausalLM.from_pretrained(MODEL_ARCH)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_ARCH,
+    torch_dtype=torch.bfloat16
+).to(device)
 
 print("2. Model is initialized with pre-trained weights.")
 
@@ -31,7 +36,7 @@ def generate():
     try:
         data = request.get_json()
         prompt = data["prompt"]
-        input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+        input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
 
         log_probs = []
         generated_ids = []

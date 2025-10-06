@@ -30,6 +30,7 @@ object SymbolicEngine {
     case Abs(y, body) if y == x => term // Shadowing
     case Abs(y, body) => Abs(y, substitute(body, x, replacement))
     case App(f, a) => App(substitute(f, x, replacement), substitute(a, x, replacement))
+    case ParseError() => term
   }
 
   def normalize(term: Term, maxSteps: Int = 100): Term = {
@@ -47,6 +48,7 @@ object SymbolicEngine {
     case App(f, a) => App(betaReduceStep(f), betaReduceStep(a))
     case Abs(x, body) => Abs(x, betaReduceStep(body))
     case v: Var => v
+    case p: ParseError => p
   }
 
   def areAlphaEquivalent(t1: Term, t2: Term): Boolean = {
@@ -90,7 +92,7 @@ object RemoteLLM {
     }
   }
 
-  def getResponse(prompt: String): Term = {
+  def getResponse(prompt: String): Option[Term] = {
     val requestPayload = LLMRequest(prompt).asJson
     val request = basicRequest
       .post(uri"http://127.0.0.1:5000/generate")
@@ -104,11 +106,11 @@ object RemoteLLM {
     response.body match {
       case Right(llmResponse) =>
         println(s"   Raw response from model: '${llmResponse.generated_text}'")
-        parseTerm(llmResponse.generated_text)
+        Some(parseTerm(llmResponse.generated_text))
       case Left(error) =>
         println(s"   ❌ Error calling remote LLM: $error")
         println("   Is the python llm_server.py running?")
-        Var("api_error")
+        None
     }
   }
 
@@ -148,7 +150,7 @@ object AbsoluteZeroReasoner {
   private var taskBuffer = List(seedTriplet)
 
   // --- Rôle 1: Proposer ---
-  def proposeProgram(): Term = {
+  def proposeProgram(): Option[Term] = {
     val examples = taskBuffer.take(2).map(t => SymbolicEngine.pretty(t.program)).mkString("\n")
     val prompt =
       s"""
@@ -157,14 +159,14 @@ object AbsoluteZeroReasoner {
       Format attendu : UN SEUL terme, sans espace avant/après, sans guillemets.
       Nouveau terme :
       """
-    println(s"1. Proposer is calling LLM to generate a new program...\n{$prompt")
+    println(s"1. Proposer is calling LLM to generate a new program...\n $prompt")
     val newProgram = RemoteLLM.getResponse(prompt)
-    println(s"   LLM proposed new program: ${SymbolicEngine.pretty(newProgram)}")
+    println(s"   LLM proposed new program: ${SymbolicEngine.pretty(newProgram.getOrElse(ParseError()))}")
     newProgram
   }
 
   // --- Rôle 2: Solveur ---
-  def solve(program: Term, input: Term): Term = {
+  def solve(program: Term, input: Term): Option[Term] = {
     val prompt = s"Deduction Task:\nProgram: ${SymbolicEngine.pretty(program)}\nInput: ${SymbolicEngine.pretty(input)}\nWhat is the output?"
     RemoteLLM.getResponse(prompt)
   }
@@ -196,38 +198,44 @@ object AbsoluteZeroReasoner {
       // --- 1. PHASE DE PROPOSITION ---
       val proposedProgram = proposeProgram()
 
-      if (!proposedProgram.equals(ParseError())) {
-        val randomInput = Var(Seq("a", "b", "c")(random.nextInt(3)))
+      proposedProgram match {
+        case Some(program) =>
 
-        // --- 2. PHASE DE VALIDATION ---
-        println("2. Validation du nouveau programme avec le moteur symbolique...")
-        val validTriplet = validateAndStore(proposedProgram, randomInput)
+          val randomInput = Var(Seq("a", "b", "c")(random.nextInt(3)))
 
-        // --- 3. PHASE DE RÉSOLUTION ---
-        println("3. Le Solveur tente de résoudre la tâche auto-générée...")
-        val solution = solve(validTriplet.program, validTriplet.input)
-        println(s"   Solution proposée par le solveur: ${SymbolicEngine.pretty(solution)}")
+          // --- 2. PHASE DE VALIDATION ---
+          println("2. Validation du nouveau programme avec le moteur symbolique...")
+          val validTriplet = validateAndStore(program, randomInput)
 
-        // --- 4. PHASE DE RÉCOMPENSE ET D'ENTRAÎNEMENT ---
-        println("4. Vérification de la solution et calcul de la récompense...")
-        val correctOutput = validTriplet.output
-        val reward = if (SymbolicEngine.areAlphaEquivalent(solution, correctOutput)) 1.0 else 0.0
+          // --- 3. PHASE DE RÉSOLUTION ---
+          println("3. Le Solveur tente de résoudre la tâche auto-générée...")
+          val solution = solve(validTriplet.program, validTriplet.input)
 
-        if (reward > 0) {
-          println(s"   ✅ Succès! Récompense: $reward.")
-        } else {
-          println(s"   ❌ Échec. Récompense: $reward. Attendu: ${SymbolicEngine.pretty(correctOutput)}")
-        }
+          solution match {
+            case Some(sol) =>
+              println(s"   Solution proposée par le solveur: ${SymbolicEngine.pretty(sol)}")
 
-        // Envoyer le signal d'entraînement pour l'action du SOLVEUR
-        RemoteLLM.sendTrainSignal(reward)
+              // --- 4. PHASE DE RÉCOMPENSE ET D'ENTRAÎNEMENT ---
+              println("4. Vérification de la solution et calcul de la récompense...")
+              val correctOutput = validTriplet.output
+              val reward = if (SymbolicEngine.areAlphaEquivalent(sol, correctOutput)) 1.0 else 0.0
 
-        // NOTE: Dans le papier AZR, le PROPOSEUR est également récompensé s'il crée des tâches
-        // de difficulté moyenne. Nous simplifions cela pour l'instant.
-      } else {
-        println("❌ Échec parse error")
+              if (reward > 0) {
+                println(s"   ✅ Succès! Récompense: $reward.")
+              } else {
+                println(s"   ❌ Échec. Récompense: $reward. Attendu: ${SymbolicEngine.pretty(correctOutput)}")
+              }
+
+              // Envoyer le signal d'entraînement pour l'action du SOLVEUR
+              RemoteLLM.sendTrainSignal(reward)
+
+            // NOTE: Dans le papier AZR, le PROPOSEUR est également récompensé s'il crée des tâches
+            // de difficulté moyenne. Nous simplifions cela pour l'instant.
+          }
+        case None =>
+          println("❌ Échec parse error")
+
       }
-
     }
     println("\n--- Fin de la boucle de Self-Play AZR ---")
   }
