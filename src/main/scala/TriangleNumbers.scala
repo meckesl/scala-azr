@@ -7,14 +7,13 @@ class TriangleNumbers(val height: Int) {
   // Génère la pyramide sous forme de List[List[String]]
   private val pyramid: List[List[String]] = {
     def pad(n: Int): String = f"$n%06d" // Formatage sur 2 chiffres avec zéro initial
-
     (1 to height).scanLeft((-1, List[String]())) { case ((lastNum, _), line) =>
       val start = lastNum + 1
       val end = start + line - 1
       val currentLine =
-        if (line % 2 == 1) (start to end).map(pad).toList
-        else (end to start by -1).map(pad).toList
-      //(start to end).map(pad).toList
+        //if (line % 2 == 1) (start to end).map(pad).toList
+        //else (end to start by -1).map(pad).toList
+        (start to end).map(pad).toList
       (end, currentLine)
     }.tail.map(_._2).toList
   }
@@ -54,17 +53,24 @@ class TriangleNumbers(val height: Int) {
     val image = new BufferedImage(maxLineWidth, height * pixelSize, BufferedImage.TYPE_INT_RGB)
     val g = image.createGraphics()
 
+    // Déterminer la somme maximale des chiffres pour la normalisation
+    val maxNum = height * (height + 1) / 2
+    val maxSum = math.log10(maxNum).toInt * 9 // Estimation
+
     pyramid.zipWithIndex.foreach { case (line, y) =>
       val lineWidth = line.length * pixelSize
-      val xOffset = (maxLineWidth - lineWidth) / 2
+      val xOffset = 0// (maxLineWidth - lineWidth) / 2
       line.zipWithIndex.foreach { case (s, x) =>
         val num = s.toInt
         val color = if (isPrime(num)) {
-          Color.RED
-        } else if (isPerfectSquare(num)) {
-          Color.BLUE
+          val digitSum = s.map(_ - '0').sum
+          // Normaliser la luminosité en fonction de la somme des chiffres
+          val brightness = (50 + (205 * digitSum.toDouble / maxSum)).toInt
+          new Color(math.min(255, brightness), math.min(255, brightness), math.min(255, brightness))
+        //} else if (isPerfectSquare(num)) {
+        //  Color.WHITE
         } else {
-          val gray = (255 * (num.toDouble / (height * height))).toInt
+          val gray = 15 //(255 * (num.toDouble / (height * height))).toInt
           new Color(gray, gray, gray)
         }
         g.setColor(color)
@@ -116,7 +122,7 @@ class TriangleNumbers(val height: Int) {
 // Exemple d'utilisation
 object TriangleNumbersExample {
   def main(args: Array[String]): Unit = {
-    val pyramid = new TriangleNumbers(3000)
+    val pyramid = new TriangleNumbers(4000)
     println("Pyramide numérique en spirale inversée :")
     pyramid.renderPyramidImage("pyramid.png")
   }
