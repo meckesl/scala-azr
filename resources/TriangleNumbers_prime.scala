@@ -1,8 +1,3 @@
-import java.awt.image.BufferedImage
-import java.awt.Color
-import java.io.File
-import javax.imageio.ImageIO
-
 class TriangleNumbers(val height: Int) {
   // Génère la pyramide sous forme de List[List[String]]
   private val pyramid: List[List[String]] = {
@@ -12,9 +7,9 @@ class TriangleNumbers(val height: Int) {
       val start = lastNum + 1
       val end = start + line - 1
       val currentLine =
-        if (line % 2 == 1) (start to end).map(pad).toList
-        else (end to start by -1).map(pad).toList
-      //(start to end).map(pad).toList
+        //if (line % 2 == 1) (start to end).map(pad).toList
+        //else (end to start by -1).map(pad).toList
+        (start to end).map(pad).toList
       (end, currentLine)
     }.tail.map(_._2).toList
   }
@@ -35,45 +30,15 @@ class TriangleNumbers(val height: Int) {
   def display(): Unit = {
     pyramid.zipWithIndex.foreach { case (line, i) =>
       val lineNumber = i + 1
-      val sumOfElements = line.map(_.toInt).sum
-      val calculationResult = sumOfElements.toDouble
       val indent = " " * (height - i - 1) // * 3 Indentation pour l'alignement
-      val processedLine = line.map {
-        case s =>
+      val processedLine = line.map { s =>
         val num = s.toInt
         if (isPrime(num)) "."
         // else if (isPerfectSquare(num)) "s"
-        else "" //s
+        else "#" //s
       }
-      println(f"$lineNumber%3d: ($calculationResult%10.0f) " + indent + processedLine.mkString(" "))
+      println(f"$lineNumber%3d: " + indent + processedLine.mkString(" "))
     }
-  }
-
-  def renderPyramidImage(filePath: String, pixelSize: Int = 1): Unit = {
-    val maxLineWidth = pyramid.last.length * pixelSize
-    val image = new BufferedImage(maxLineWidth, height * pixelSize, BufferedImage.TYPE_INT_RGB)
-    val g = image.createGraphics()
-
-    pyramid.zipWithIndex.foreach { case (line, y) =>
-      val lineWidth = line.length * pixelSize
-      val xOffset = (maxLineWidth - lineWidth) / 2
-      line.zipWithIndex.foreach { case (s, x) =>
-        val num = s.toInt
-        val color = if (isPrime(num)) {
-          Color.RED
-        } else if (isPerfectSquare(num)) {
-          Color.BLUE
-        } else {
-          val gray = (255 * (num.toDouble / (height * height))).toInt
-          new Color(gray, gray, gray)
-        }
-        g.setColor(color)
-        g.fillRect(xOffset + x * pixelSize, y * pixelSize, pixelSize, pixelSize)
-      }
-    }
-
-    g.dispose()
-    ImageIO.write(image, "png", new File(filePath))
   }
 
   // Retourne la pyramide sous forme de List[List[String]]
@@ -116,8 +81,8 @@ class TriangleNumbers(val height: Int) {
 // Exemple d'utilisation
 object TriangleNumbersExample {
   def main(args: Array[String]): Unit = {
-    val pyramid = new TriangleNumbers(3000)
+    val pyramid = new TriangleNumbers(100)
     println("Pyramide numérique en spirale inversée :")
-    pyramid.renderPyramidImage("pyramid.png")
+    pyramid.display()
   }
 }

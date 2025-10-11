@@ -4,7 +4,7 @@ import torch
 
 # --- Model Configuration ---
 # We are now loading a more capable, instruction-tuned model specialized for code.
-MODEL_ARCH = "Qwen/Qwen2-0.5B-Instruct"
+MODEL_ARCH = "google/gemma-7b-it"
 
 print(f"1. Loading pre-trained model and tokenizer for {MODEL_ARCH}...")
 # Load the standard configuration and tokenizer for the chosen architecture.
@@ -36,6 +36,7 @@ def generate():
     try:
         data = request.get_json()
         prompt = data["prompt"]
+        temperature = data.get("temperature", 0.5)  # Add temperature
         input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
 
         log_probs = []
@@ -49,6 +50,10 @@ def generate():
             
             # Get the logits for the very last token in the sequence
             next_token_logits = outputs.logits[:, -1, :]
+            
+            # Apply temperature scaling
+            if temperature > 0:
+                next_token_logits = next_token_logits / temperature
             
             # Create a probability distribution from the logits
             dist = torch.distributions.Categorical(logits=next_token_logits)

@@ -154,10 +154,19 @@ object AbsoluteZeroReasoner {
     val examples = taskBuffer.take(2).map(t => SymbolicEngine.pretty(t.program)).mkString("\n")
     val prompt =
       s"""
-      Réponds UNIQUEMENT avec un terme du lambda calcul non typé, sans explication ni commentaire.
-      Exemples valides : λx.x, λx.λy.x y, (λx.x) z
-      Format attendu : UN SEUL terme, sans espace avant/après, sans guillemets.
-      Nouveau terme :
+      Votre tâche est de générer UN SEUL terme du lambda calcul non typé.
+      Ne fournissez AUCUNE explication, commentaire ou texte supplémentaire.
+
+      Exemple 1:
+      λx.x
+
+      Exemple 2:
+      λx.λy.x
+
+      Exemple 3:
+      (λz.z) (λy.y)
+
+      Générez un nouveau terme :
       """
     println(s"1. Proposer is calling LLM to generate a new program...\n $prompt")
     val newProgram = RemoteLLM.getResponse(prompt)
@@ -217,8 +226,9 @@ object AbsoluteZeroReasoner {
 
               // --- 4. PHASE DE RÉCOMPENSE ET D'ENTRAÎNEMENT ---
               println("4. Vérification de la solution et calcul de la récompense...")
+
               val correctOutput = validTriplet.output
-              val reward = if (SymbolicEngine.areAlphaEquivalent(sol, correctOutput)) 1.0 else 0.0
+              val reward = if (SymbolicEngine.areAlphaEquivalent(sol, correctOutput)) 1.0 else -1.0
 
               if (reward > 0) {
                 println(s"   ✅ Succès! Récompense: $reward.")

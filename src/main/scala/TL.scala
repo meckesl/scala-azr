@@ -1,17 +1,31 @@
 object TL {
 
-  def renderSnailTriangleNumber(dimension: Int = 5): Unit = {
-    (0 to dimension) map { sequence =>
-      (1 to dimension) map { height =>
-        (sequence to dimension) map { term =>
-          print(term);
-        }
+
+  /*def KKsnailTriangleNumber(dimension: Long = 5): Unit = {
+    (0L until dimension) map { dim =>
+      (0L to dim) map { digit =>
+        print(sumDigit(digit))
       }
+      print("\n")
     }
   }
 
+  def snailTriangleNumber(digit: Long, acc: Long = 0L): Long = {
+    digit match {
+      case x if x > 0 => sumDigit(digit - 1L, acc + digit)
+      case _ => acc
+    }
+  }*/
+
+  def snailRow(row: Int): Unit = {
+    (0 until row)
+  }
+
+
+
   def main(args: Array[String]): Unit = {
-    renderSnailTriangleNumber()
+    //print(sumDigit(3L))
+    //*snailTriangleNumber()
   }
 
 }
